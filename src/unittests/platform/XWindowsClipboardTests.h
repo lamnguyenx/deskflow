@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
  */
 
+#include <QTest>
+
 #include "base/Log.h"
 
 #if !WINAPI_LIBEI && !WINAPI_PORTAL
 #include "platform/XWindowsClipboard.h"
 #endif
-
-#include <QTest>
 
 class XWindowsClipboardTests : public QObject
 {

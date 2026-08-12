@@ -61,12 +61,12 @@ void XWindowsClipboardTests::singleFormat()
 {
   auto &clipboard = getClipboard();
   QVERIFY(clipboard.empty());
-  clipboard.add(XWindowsClipboard::kText, m_testString);
-  QVERIFY(!clipboard.has(XWindowsClipboard::kText));
-  QCOMPARE(clipboard.get(XWindowsClipboard::kText), m_testString);
+  clipboard.add(IClipboard::Format::Text, m_testString);
+  QVERIFY(!clipboard.has(IClipboard::Format::Text));
+  QCOMPARE(clipboard.get(IClipboard::Format::Text), m_testString);
 
-  clipboard.add(XWindowsClipboard::kText, m_testString2);
-  QCOMPARE(clipboard.get(XWindowsClipboard::kText), m_testString2);
+  clipboard.add(IClipboard::Format::Text, m_testString2);
+  QCOMPARE(clipboard.get(IClipboard::Format::Text), m_testString2);
 }
 
 XWindowsClipboard &XWindowsClipboardTests::getClipboard()
