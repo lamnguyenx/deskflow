@@ -15,6 +15,7 @@ add_custom_target(docs ALL
     HelpMain.md
     Configuration.md
     Issues.md
+    important/how-to-build-on-macos.md
 )
 
 install(
@@ -24,6 +25,7 @@ install(
     Configuration.md
     Issues.md
     Security.md
+    important/how-to-build-on-macos.md
   DESTINATION ${CMAKE_INSTALL_DOCDIR}
 )
 
