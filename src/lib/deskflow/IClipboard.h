@@ -54,6 +54,14 @@ public:
     TotalFormats //!< The number of clipboard formats supported
   };
 
+  //! Get format names present in clipboard
+  /*!
+  Returns a human-readable string listing the formats present in \p clipboard
+  (e.g. "text", "bitmap", "text+html"). Returns "empty" if no data is present.
+  Handles open()/close() internally.
+  */
+  static std::string formatToString(const IClipboard *clipboard);
+
   //! @name manipulators
   //@{
 

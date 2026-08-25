@@ -151,6 +151,37 @@ bool IClipboard::copy(IClipboard *dst, const IClipboard *src, Time time)
   return success;
 }
 
+std::string IClipboard::formatToString(const IClipboard *clipboard)
+{
+  assert(clipboard != nullptr);
+
+  std::string result;
+  if (!clipboard->open(0)) {
+    return "unknown";
+  }
+
+  if (clipboard->has(Format::Text)) {
+    result = "text";
+  }
+  if (clipboard->has(Format::HTML)) {
+    if (!result.empty())
+      result += "+";
+    result += "html";
+  }
+  if (clipboard->has(Format::Bitmap)) {
+    if (!result.empty())
+      result += "+";
+    result += "bitmap";
+  }
+
+  clipboard->close();
+
+  if (result.empty()) {
+    result = "empty";
+  }
+  return result;
+}
+
 uint32_t IClipboard::readUInt32(const char *buf)
 {
   const auto *ubuf = reinterpret_cast<const unsigned char *>(buf);

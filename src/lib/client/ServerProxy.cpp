@@ -375,7 +375,7 @@ bool ServerProxy::onGrabClipboard(ClipboardID id)
 void ServerProxy::onClipboardChanged(ClipboardID id, const IClipboard *clipboard)
 {
   std::string data = IClipboard::marshall(clipboard);
-  LOG_DEBUG("sending clipboard %d seqnum=%d", id, m_seqNum);
+  LOG_DEBUG("sending clipboard %d seqnum=%d format=%s", id, m_seqNum, IClipboard::formatToString(clipboard).c_str());
 
   StreamChunker::sendClipboard(data, data.size(), id, m_seqNum, m_events, this);
 }
@@ -559,11 +559,10 @@ void ServerProxy::setClipboard()
     // forward
     Clipboard clipboard;
     clipboard.unmarshall(m_clipboardDataCached, 0);
+    LOG_INFO("clipboard was updated, format=%s", IClipboard::formatToString(&clipboard).c_str());
     m_client->setClipboard(id, &clipboard);
     m_clipboardDataCached.clear();
     m_clipboardDataCached.shrink_to_fit();
-
-    LOG_INFO("clipboard was updated");
   } else if (r == TransferState::Error) {
     requestDisconnect("invalid clipboard data from server");
   }

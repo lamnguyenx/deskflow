@@ -8,6 +8,7 @@
 
 #include "base/Log.h"
 #include "deskflow/ClipboardChunk.h"
+#include "deskflow/IClipboard.h"
 #include "deskflow/ProtocolUtil.h"
 #include "deskflow/StreamChunker.h"
 #include "io/IStream.h"
@@ -42,7 +43,10 @@ void ClientProxy1_6::setClipboard(ClipboardID id, const IClipboard *clipboard)
     std::string data = m_clipboard[id].m_clipboard.marshall();
 
     size_t size = data.size();
-    LOG_DEBUG("sending clipboard %d to \"%s\"", id, getName().c_str());
+    LOG_DEBUG(
+        "sending clipboard %d to \"%s\", format=%s", id, getName().c_str(),
+        IClipboard::formatToString(&m_clipboard[id].m_clipboard).c_str()
+    );
 
     StreamChunker::sendClipboard(data, size, id, 0, m_events, this);
   }
@@ -71,6 +75,11 @@ bool ClientProxy1_6::recvClipboard()
     m_clipboard[id].m_sequenceNumber = seq;
     m_clipboardDataCached.clear();
     m_clipboardDataCached.shrink_to_fit();
+
+    LOG(
+        (CLOG_INFO "received client \"%s\" clipboard %d seqnum=%d, format=%s", getName().c_str(), id, seq,
+         IClipboard::formatToString(&m_clipboard[id].m_clipboard).c_str())
+    );
 
     // notify
     auto *info = new ClipboardInfo;
