@@ -20,6 +20,7 @@
 
 #include <X11/Xlib.h>
 
+class EventQueueTimer;
 class XWindowsClipboard;
 class XWindowsKeyState;
 class XWindowsScreenSaver;
@@ -207,6 +208,13 @@ private:
   // clipboards
   XWindowsClipboard *m_clipboard[kClipboardEnd];
   uint32_t m_sequenceNumber = 0;
+
+  // clipboard ownership polling fallback.  catches clipboard writes that
+  // don't produce a SelectionClear for us (e.g. a terminal emulator
+  // writing the clipboard via OSC 52 when we don't own the selection).
+  EventQueueTimer *m_clipboardTimer = nullptr;
+  Window m_clipboardOwner[kClipboardEnd];
+  bool m_clipboardOwnersTracked = false;
 
   // screen saver stuff
   XWindowsScreenSaver *m_screensaver = nullptr;

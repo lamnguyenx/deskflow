@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# osc52watch — watch OSC 52 escape sequences on the host machine.
+#
+# Modes:
+#   osc52watch pty <cmd...>        run a command under a pty and print every
+#                                  OSC 52 sequence it emits (works anywhere,
+#                                  no X11 needed)
+#   osc52watch clipboard [secs]    poll the X clipboard every secs (default 1)
+#                                  and print changes with timestamps
+#   osc52watch clipboard --primary [secs]
+#                                  poll the primary selection instead
+#
+# Note: xclip itself has no logs. This tool watches what a terminal emulator
+# would consume (pty stream) or what it would produce (X clipboard content).
+set -euo pipefail
+
+usage() {
+  sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-0}"
+}
+
+decode() {
+  local enc="$1"
+  if command -v base64 >/dev/null; then
+    printf '%s' "$enc" | base64 -d 2>/dev/null || true
+  else
+    printf '%s' "$enc"
+  fi
+}
+
+osc_pattern='\x1b\]52;[cp];[A-Za-z0-9+/=]+'
+
+cmd_pty() {
+  if [[ $# -eq 0 ]]; then
+    echo "osc52watch: pty mode requires a command to run" >&2
+    return 1
+  fi
+  if [[ "$1" == "--" ]]; then
+    shift
+  fi
+  script -qec "$*" /dev/null | grep -aoP --line-buffered "$osc_pattern" | while IFS= read -r seq; do
+    local sel enc
+    sel=${seq#*;}; sel=${sel:0:1}
+    enc=${seq#*$sel;}
+    echo "[$(date +%T)] OSC52 $sel $(decode "$enc")"
+  done
+}
+
+cmd_clipboard() {
+  local sel="clipboard" interval=1
+  if [[ "${1:-}" == "--primary" ]]; then
+    sel="primary"
+    shift
+  fi
+  if [[ "${1:-}" =~ ^[0-9]+$ ]]; then
+    interval="$1"
+    shift
+  fi
+
+  local old="" new=""
+  if ! timeout 1 xclip -o -selection "$sel" 2>/dev/null; then
+    old=""
+  else
+    old="$(timeout 1 xclip -o -selection "$sel" 2>/dev/null || true)"
+    echo "[$(date +%T)] initial $sel: $old"
+  fi
+
+  while :; do
+    sleep "$interval"
+    new="$(timeout 1 xclip -o -selection "$sel" 2>/dev/null || true)"
+    if [[ "$new" != "$old" ]]; then
+      echo "[$(date +%T)] $sel changed -> $new"
+      old="$new"
+    fi
+  done
+}
+
+case "${1:-}" in
+  pty)        shift; cmd_pty "$@" ;;
+  clipboard)  shift; cmd_clipboard "$@" ;;
+  -h|--help|help) usage 0 ;;
+  *) usage 1 ;;
+esac

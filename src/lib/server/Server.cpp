@@ -1159,12 +1159,19 @@ void Server::handleClipboardGrabbed(const Event &event, BaseClientProxy *grabber
   }
   const auto *info = static_cast<const IScreen::ClipboardInfo *>(event.getData());
 
-  // ignore grab if sequence number is old.  always allow primary
-  // screen to grab.
+  // accept the grab from any known screen, even if its sequence number is
+  // older than the current one.  a screen's sequence number only advances
+  // when the server enters it, so a client pushing its clipboard (e.g. an
+  // OSC 52 write on a terminal) legitimately carries a stale sequence
+  // number; rejecting it permanently locks that client out of clipboard
+  // sharing until it is re-entered.  stale DATA is still filtered in
+  // onClipboardChanged via the sequence and "unchanged" checks.
   ClipboardInfo &clipboard = m_clipboards[info->m_id];
   if (grabber != m_primaryClient && info->m_sequenceNumber < clipboard.m_clipboardSeqNum) {
-    LOG_DEBUG("ignored screen \"%s\" grab of clipboard %d", getName(grabber).c_str(), info->m_id);
-    return;
+    LOG_DEBUG(
+        "screen \"%s\" grabbed clipboard %d with stale sequence number %u (current %u), accepting",
+        getName(grabber).c_str(), info->m_id, info->m_sequenceNumber, clipboard.m_clipboardSeqNum
+    );
   }
 
   // mark screen as owning clipboard

@@ -142,6 +142,7 @@ XWindowsScreen::XWindowsScreen(const char *displayName, bool isPrimary, IEventQu
   // initialize the clipboards
   for (ClipboardID id = 0; id < kClipboardEnd; ++id) {
     m_clipboard[id] = new XWindowsClipboard(m_display, m_window, id);
+    m_clipboardOwner[id] = None;
   }
 
   // install event handlers
@@ -160,6 +161,11 @@ XWindowsScreen::~XWindowsScreen()
 
   m_events->adoptBuffer(nullptr);
   m_events->removeHandler(EventTypes::System, m_events->getSystemTarget());
+  if (m_clipboardTimer != nullptr) {
+    m_events->removeHandler(EventTypes::Timer, m_clipboardTimer);
+    m_events->deleteTimer(m_clipboardTimer);
+    m_clipboardTimer = nullptr;
+  }
   for (auto clipboard : m_clipboard) {
     delete clipboard;
   }
@@ -202,6 +208,16 @@ void XWindowsScreen::enable()
     // warp the mouse to the cursor center
     fakeMouseMove(m_xCenter, m_yCenter);
   }
+
+  // poll clipboard ownership so we catch clipboard writes that don't
+  // generate a SelectionClear for us (e.g. terminal OSC 52 writes when
+  // we don't own the selection).  re-baseline so the first tick doesn't
+  // fire a spurious grab.
+  if (m_clipboardTimer == nullptr) {
+    m_clipboardTimer = m_events->newTimer(0.5, nullptr);
+    m_events->addHandler(EventTypes::Timer, m_clipboardTimer, [this](const auto &) { checkClipboards(); });
+  }
+  m_clipboardOwnersTracked = false;
 }
 
 void XWindowsScreen::disable()
@@ -218,6 +234,12 @@ void XWindowsScreen::disable()
   // restore auto-repeat state
   if (!m_isPrimary && m_autoRepeat) {
     // XAutoRepeatOn(m_display);
+  }
+
+  if (m_clipboardTimer != nullptr) {
+    m_events->removeHandler(EventTypes::Timer, m_clipboardTimer);
+    m_events->deleteTimer(m_clipboardTimer);
+    m_clipboardTimer = nullptr;
   }
 }
 
@@ -365,7 +387,46 @@ bool XWindowsScreen::setClipboard(ClipboardID id, const IClipboard *clipboard)
 
 void XWindowsScreen::checkClipboards()
 {
-  // do nothing, we're always up to date
+  for (ClipboardID id = 0; id < kClipboardEnd; ++id) {
+    if (m_clipboard[id] == nullptr) {
+      continue;
+    }
+
+    // the selection owner tells us who currently holds the clipboard.
+    // XGetSelectionOwner is non-blocking and cheap at our poll rate.
+    Window owner = XGetSelectionOwner(m_display, m_clipboard[id]->getSelection());
+
+    // first pass: baseline the owners without firing any events, so we
+    // don't report a stale pre-existing clipboard as newly grabbed.
+    if (!m_clipboardOwnersTracked) {
+      m_clipboardOwner[id] = owner;
+      continue;
+    }
+
+    if (owner == m_clipboardOwner[id]) {
+      continue;
+    }
+
+    if (m_clipboardOwner[id] != m_window && owner != m_window) {
+      // the selection changed hands without us ever owning it, so no
+      // SelectionClear was delivered.  this catches clipboard writes we
+      // would otherwise miss, e.g. a terminal emulator handling OSC 52
+      // while we're not the selection owner.  report it as grabbed so
+      // the client pushes the new content to the server.
+      LOG_DEBUG(
+          "clipboard %d ownership changed 0x%lx -> 0x%lx without SelectionClear (OSC 52-style write?)", id,
+          m_clipboardOwner[id], owner
+      );
+      sendClipboardEvent(EventTypes::ClipboardGrabbed, id);
+    }
+    // if we were the previous owner, SelectionClear already fired and
+    // this poll is just confirming it; if we're the new owner, the data
+    // came from the server and must not be echoed back.
+
+    m_clipboardOwner[id] = owner;
+  }
+
+  m_clipboardOwnersTracked = true;
 }
 
 void XWindowsScreen::openScreensaver(bool notify)
