@@ -314,6 +314,19 @@ extern const char *const kMsgHelloBackArgs;
 extern const char *const kMsgCNoop;
 
 /**
+ * @brief Switch to the primary computer
+ *
+ * **Message Code**: `"CSWP"`
+ * **Direction**: Secondary → Primary
+ * **Format**: No parameters
+ *
+ * Requests that the server move the active cursor back to the primary
+ * computer. Used by client-side global hotkeys; ignored if the primary
+ * computer is already active.
+ */
+extern const char *const kMsgCSwitchToPrimary;
+
+/**
  * @brief Close connection command
  *
  * **Message Code**: `"CBYE"`

@@ -1092,27 +1092,29 @@ void XWindowsComputer::handleSystemEvent(const Event &event)
 
   // update key state
   bool isRepeat = false;
-  if (m_isPrimary) {
-    if (xevent->type == KeyRelease) {
-      // check if this is a key repeat by getting the next
-      // KeyPress event that has the same key and time as
-      // this release event, if any.  first prepare the
-      // filter info.
-      KeyEventFilter filter;
-      filter.m_event = KeyPress;
-      filter.m_window = xevent->xkey.window;
-      filter.m_time = xevent->xkey.time;
-      filter.m_keycode = xevent->xkey.keycode;
-      XEvent xevent2;
-      isRepeat = (XCheckIfEvent(m_display, &xevent2, &XWindowsComputer::findKeyEvent, (XPointer)&filter) == True);
+  if (m_isPrimary && xevent->type == KeyRelease) {
+    // check if this is a key repeat by getting the next
+    // KeyPress event that has the same key and time as
+    // this release event, if any.  first prepare the
+    // filter info.
+    KeyEventFilter filter;
+    filter.m_event = KeyPress;
+    filter.m_window = xevent->xkey.window;
+    filter.m_time = xevent->xkey.time;
+    filter.m_keycode = xevent->xkey.keycode;
+    XEvent xevent2;
+    isRepeat = (XCheckIfEvent(m_display, &xevent2, &XWindowsComputer::findKeyEvent, (XPointer)&filter) == True);
+  }
+
+  if (xevent->type == KeyPress || xevent->type == KeyRelease) {
+    if (xevent->xkey.window == m_root) {
+      // this is a hot key, on either a primary or secondary computer
+      onHotKey(xevent->xkey, isRepeat);
+      return;
     }
 
-    if (xevent->type == KeyPress || xevent->type == KeyRelease) {
-      if (xevent->xkey.window == m_root) {
-        // this is a hot key
-        onHotKey(xevent->xkey, isRepeat);
-        return;
-      } else if (!m_isOnComputer && onHotKey(xevent->xkey, isRepeat)) {
+    if (m_isPrimary) {
+      if (!m_isOnComputer && onHotKey(xevent->xkey, isRepeat)) {
         return;
       }
 

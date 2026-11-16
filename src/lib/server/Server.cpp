@@ -510,6 +510,14 @@ void Server::switchComputer(BaseClientProxy *dst, int32_t x, int32_t y, bool for
   }
 }
 
+void Server::switchToPrimary()
+{
+  if (m_active != m_primaryClient) {
+    LOG_INFO("switching to primary computer on client request");
+    jumpToComputer(m_primaryClient);
+  }
+}
+
 void Server::jumpToComputer(BaseClientProxy *newComputer)
 {
   assert(newComputer != nullptr);
