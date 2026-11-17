@@ -18,6 +18,10 @@ public:
   ClientProxy1_4(const std::string &name, deskflow::IStream *adoptedStream, Server *server, IEventQueue *events);
   ~ClientProxy1_4() override = default;
 
+protected:
+  bool parseMessage(const uint8_t *code) override;
+
+public:
   //! @name accessors
   //@{
 

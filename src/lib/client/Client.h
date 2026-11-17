@@ -16,6 +16,7 @@
 #include "deskflow/IClipboard.h"
 #include "net/NetworkAddress.h"
 
+#include <array>
 #include <climits>
 #include <string>
 
@@ -218,8 +219,13 @@ private:
   void handleResume();
   void sendClipboardThread(void *);
   void bindNetworkInterface(IDataSocket *socket) const;
+  void registerClientHotkeys();
+  void unregisterClientHotkeys();
+  void handleClientHotkey(const Event &event);
 
 private:
+  static constexpr size_t kClientHotkeyCount = 4;
+  std::array<uint32_t, kClientHotkeyCount> m_clientHotkeyIDs{};
   std::string m_name;
   NetworkAddress m_serverAddress;
   ISocketFactory *m_socketFactory = nullptr;

@@ -107,6 +107,7 @@ XWindowsComputer::XWindowsComputer(const char *displayName, bool isPrimary, IEve
     m_keyState = new XWindowsKeyState(m_display, m_xkb, events, m_keyMap);
     LOG_DEBUG("computer shape: %d,%d %dx%d %s", m_x, m_y, m_w, m_h, m_xinerama ? "(xinerama)" : "");
     LOG_DEBUG("window is 0x%08x", m_window);
+    LOG_DEBUG("scroll scale: y=%.2f x=%.2f", yScrollScale(), xScrollScale());
   } catch (...) {
     if (m_display != nullptr) {
       XCloseDisplay(m_display);
@@ -793,36 +794,67 @@ void XWindowsComputer::fakeMouseWheel(ScrollDelta delta) const
   if (delta.y == 0 && delta.x == 0) {
     return;
   }
-  delta = applyScrollModifier(delta);
-  bool isYScroll = delta.y != 0;
-  int32_t axisDelta = delta.y == 0 ? delta.x : delta.y;
+
+  const bool isYScroll = delta.y != 0;
+  const int32_t rawDelta = isYScroll ? delta.y : delta.x;
+
+  // The wire delta is in 120-unit wheel clicks but X11 can only send whole
+  // button clicks. Convert to clicks first (the historical per-event
+  // behaviour), then apply the client scroll scale to the click count and
+  // carry the fractional part to the next event. Scaling the raw units
+  // instead would round a 0.5 scale back up to a full click every time.
+  const int32_t absDelta = rawDelta < 0 ? -rawDelta : rawDelta;
+  const int32_t clicksThisEvent = (absDelta + s_scrollDelta - 1) / s_scrollDelta;
+
+  const double scale = isYScroll ? yScrollScale() : xScrollScale();
+  const bool invert = isYScroll ? invertYScroll() : invertXScroll();
+  double scaledClicks = static_cast<double>(clicksThisEvent) * scale;
+  if (rawDelta < 0) {
+    scaledClicks = -scaledClicks;
+  }
+  if (invert) {
+    scaledClicks = -scaledClicks;
+  }
+
+  double &remainder = isYScroll ? m_scrollRemainderY : m_scrollRemainderX;
+  // A direction change discards a sub-click remainder from the other way.
+  if ((scaledClicks > 0.0 && remainder < 0.0) || (scaledClicks < 0.0 && remainder > 0.0)) {
+    remainder = 0.0;
+  }
+  remainder += scaledClicks;
+  const auto wholeClicks = static_cast<int32_t>(remainder); // trunc toward zero
+  remainder -= wholeClicks;
+
+  LOG_VERBOSE(
+      "wheel %s raw=%+d scale=%.2f -> %+d clicks (remainder=%.2f)", isYScroll ? "y" : "x", rawDelta, scale,
+      wholeClicks, remainder
+  );
+
+  if (wholeClicks == 0) {
+    return;
+  }
 
   ButtonID btn = kButtonNone;
   if (isYScroll) {
-    btn = axisDelta >= 0 ? kX11ScrollWheelUp : kX11ScrollWheelDown;
+    btn = wholeClicks > 0 ? kX11ScrollWheelUp : kX11ScrollWheelDown;
   } else {
-    btn = axisDelta >= 0 ? kX11ScrollWheelLeft : kX11ScrollWheelRight;
+    btn = wholeClicks > 0 ? kX11ScrollWheelLeft : kX11ScrollWheelRight;
   }
   const unsigned int button = mapButtonToX(btn);
 
   // If the XServer does not support the Y scroll send PageUp/PageDown keystrokes instead.
-  if (const KeyCode keycode = XKeysymToKeycode(m_display, delta.y >= 0 ? XK_Page_Up : XK_Page_Down);
+  if (const KeyCode keycode = XKeysymToKeycode(m_display, wholeClicks > 0 ? XK_Page_Up : XK_Page_Down);
       button == 0 && isYScroll && keycode != 0) {
     XTestFakeKeyEvent(m_display, keycode, True, CurrentTime);
     XTestFakeKeyEvent(m_display, keycode, False, CurrentTime);
     return;
   }
 
-  // now use absolute value of delta
-  if (axisDelta < 0) {
-    axisDelta = -axisDelta;
-  }
-
-  // send as many clicks as necessary
-  while (axisDelta > 0) {
+  // send the accumulated number of whole clicks
+  const int32_t clickCount = wholeClicks < 0 ? -wholeClicks : wholeClicks;
+  for (int32_t i = 0; i < clickCount; ++i) {
     XTestFakeButtonEvent(m_display, button, True, CurrentTime);
     XTestFakeButtonEvent(m_display, button, False, CurrentTime);
-    axisDelta -= s_scrollDelta;
   }
   XFlush(m_display);
 }
@@ -1092,27 +1124,29 @@ void XWindowsComputer::handleSystemEvent(const Event &event)
 
   // update key state
   bool isRepeat = false;
-  if (m_isPrimary) {
-    if (xevent->type == KeyRelease) {
-      // check if this is a key repeat by getting the next
-      // KeyPress event that has the same key and time as
-      // this release event, if any.  first prepare the
-      // filter info.
-      KeyEventFilter filter;
-      filter.m_event = KeyPress;
-      filter.m_window = xevent->xkey.window;
-      filter.m_time = xevent->xkey.time;
-      filter.m_keycode = xevent->xkey.keycode;
-      XEvent xevent2;
-      isRepeat = (XCheckIfEvent(m_display, &xevent2, &XWindowsComputer::findKeyEvent, (XPointer)&filter) == True);
+  if (m_isPrimary && xevent->type == KeyRelease) {
+    // check if this is a key repeat by getting the next
+    // KeyPress event that has the same key and time as
+    // this release event, if any.  first prepare the
+    // filter info.
+    KeyEventFilter filter;
+    filter.m_event = KeyPress;
+    filter.m_window = xevent->xkey.window;
+    filter.m_time = xevent->xkey.time;
+    filter.m_keycode = xevent->xkey.keycode;
+    XEvent xevent2;
+    isRepeat = (XCheckIfEvent(m_display, &xevent2, &XWindowsComputer::findKeyEvent, (XPointer)&filter) == True);
+  }
+
+  if (xevent->type == KeyPress || xevent->type == KeyRelease) {
+    if (xevent->xkey.window == m_root) {
+      // this is a hot key, on either a primary or secondary computer
+      onHotKey(xevent->xkey, isRepeat);
+      return;
     }
 
-    if (xevent->type == KeyPress || xevent->type == KeyRelease) {
-      if (xevent->xkey.window == m_root) {
-        // this is a hot key
-        onHotKey(xevent->xkey, isRepeat);
-        return;
-      } else if (!m_isOnComputer && onHotKey(xevent->xkey, isRepeat)) {
+    if (m_isPrimary) {
+      if (!m_isOnComputer && onHotKey(xevent->xkey, isRepeat)) {
         return;
       }
 

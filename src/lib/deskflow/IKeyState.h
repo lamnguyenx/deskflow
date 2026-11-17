@@ -101,6 +101,23 @@ public:
   */
   virtual void fakeAllKeysUp() = 0;
 
+  //! Release keys the platform still reports pressed
+  /*!
+  Synthesizes a key release for every key the platform backend reports as
+  pressed, including keys this process never pressed.  Backends that keep the
+  authoritative key state outside the process (X11) use this to clear a
+  modifier the server released after the computer was left, which the
+  shadowed key state can no longer track.  Default implementation does
+  nothing.
+
+  Call this only when leaving a computer: it injects input and would cancel a
+  key the user is holding locally.
+  */
+  virtual void releasePressedKeys()
+  {
+    // Default implementation does nothing
+  }
+
   //! Clear stale modifiers
   /*!
   Clears stuck modifier state in platform-specific keyboard tracking (e.g. XKB).

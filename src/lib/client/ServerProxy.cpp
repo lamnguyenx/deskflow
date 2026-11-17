@@ -355,6 +355,12 @@ void ServerProxy::onInfoChanged()
   queryInfo();
 }
 
+void ServerProxy::switchToPrimary()
+{
+  ProtocolUtil::writef(m_stream, kMsgCSwitchToPrimary);
+  m_stream->flush();
+}
+
 bool ServerProxy::onGrabClipboard(ClipboardID id)
 {
   LOG_VERBOSE("sending clipboard %d changed", id);

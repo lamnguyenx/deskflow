@@ -170,6 +170,12 @@ public:
   */
   void disconnect();
 
+  //! Move the active cursor back to the primary computer
+  /*!
+  No-op when the primary computer is already active.
+  */
+  void switchToPrimary();
+
   //! Store ClientListener pointer
   void setListener(ClientListener *p)
   {

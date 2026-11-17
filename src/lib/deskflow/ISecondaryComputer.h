@@ -70,6 +70,24 @@ public:
     return delta;
   }
 
+  //! Accessors for platform code that scales in whole wheel clicks.
+  double yScrollScale() const
+  {
+    return m_yScrollScale;
+  }
+  double xScrollScale() const
+  {
+    return m_xScrollScale;
+  }
+  bool invertYScroll() const
+  {
+    return m_invertYScroll;
+  }
+  bool invertXScroll() const
+  {
+    return m_invertXScroll;
+  }
+
 private:
   /**
    * @brief this member is used to modify the verical scroll direction.

@@ -216,6 +216,11 @@ private:
   // physical button for logical button i+1.
   std::vector<unsigned char> m_buttons;
 
+  // fractional wheel clicks carried between fakeMouseWheel calls so a
+  // client scroll scale below 1.0 is not rounded back up to a full click
+  mutable double m_scrollRemainderX = 0.0;
+  mutable double m_scrollRemainderY = 0.0;
+
   // true if global auto-repeat was enabled before we turned it off
   bool m_autoRepeat;
 

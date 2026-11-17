@@ -69,13 +69,21 @@ Client::Client(
   // register suspend/resume event handlers
   m_events->addHandler(EventTypes::ComputerSuspend, getEventTarget(), [this](const auto &) { handleSuspend(); });
   m_events->addHandler(EventTypes::ComputerResume, getEventTarget(), [this](const auto &) { handleResume(); });
+
+  // client-side hotkeys are handled by the local computer platform
+  m_events->addHandler(
+      EventTypes::PrimaryComputerHotkeyDown, m_computer->getEventTarget(),
+      [this](const auto &event) { handleClientHotkey(event); }
+  );
 }
 
 Client::~Client()
 {
   m_events->removeHandler(EventTypes::ComputerSuspend, getEventTarget());
   m_events->removeHandler(EventTypes::ComputerResume, getEventTarget());
+  m_events->removeHandler(EventTypes::PrimaryComputerHotkeyDown, m_computer->getEventTarget());
 
+  unregisterClientHotkeys();
   cleanupTimer();
   cleanupComputer();
   cleanupConnecting();
@@ -173,6 +181,7 @@ void Client::handshakeComplete()
   if (m_relativeMouseMoves && !m_hasRelativeRestorePosition) {
     saveRelativeRestorePosition();
   }
+  registerClientHotkeys();
   sendEvent(EventTypes::ClientConnected);
 }
 
@@ -539,6 +548,7 @@ void Client::cleanupConnection()
 
 void Client::cleanupComputer()
 {
+  unregisterClientHotkeys();
   if (m_server != nullptr) {
     if (m_ready) {
       m_computer->disable();
@@ -766,4 +776,55 @@ void Client::bindNetworkInterface(IDataSocket *socket) const
   bindAddress.resolve();
 
   socket->bind(bindAddress);
+}
+
+void Client::registerClientHotkeys()
+{
+#if WINAPI_XWINDOWS
+  for (const auto id : m_clientHotkeyIDs) {
+    if (id != 0) {
+      return;
+    }
+  }
+
+  static const KeyID keys[kClientHotkeyCount] = {0x31, 0x32, 0x33, 0x34};
+  for (size_t i = 0; i < kClientHotkeyCount; ++i) {
+    const auto id = m_computer->registerHotKey(keys[i], KeyModifierSuper | KeyModifierControl);
+    m_clientHotkeyIDs[i] = id;
+    if (id == 0) {
+      LOG_WARN("failed to register client hotkey Super+Control+%d", static_cast<int>(i + 1));
+    } else {
+      LOG_DEBUG("registered client hotkey Super+Control+%d (id=%u)", static_cast<int>(i + 1), id);
+    }
+  }
+#endif
+}
+
+void Client::unregisterClientHotkeys()
+{
+  for (auto &id : m_clientHotkeyIDs) {
+    if (id != 0) {
+      m_computer->unregisterHotKey(id);
+      id = 0;
+    }
+  }
+}
+
+void Client::handleClientHotkey(const Event &event)
+{
+  const auto *info = static_cast<IPlatformComputer::HotKeyInfo *>(event.getData());
+  if (info == nullptr || m_server == nullptr || !m_ready) {
+    return;
+  }
+
+  for (const auto id : m_clientHotkeyIDs) {
+    if (id != 0 && id == info->m_id) {
+      if (!m_active) {
+        return;
+      }
+      LOG_INFO("client hotkey requested switch to primary computer");
+      m_server->switchToPrimary();
+      return;
+    }
+  }
 }
