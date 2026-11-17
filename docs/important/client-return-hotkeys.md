@@ -47,7 +47,6 @@ No parameters. No-op when the primary is already active.
 
 `XWindowsComputer::handleSystemEvent()` must process root-window hotkeys for
 both primary and secondary computers. The current shape is:
-
 ```cpp
 if (xevent->type == KeyPress || xevent->type == KeyRelease) {
   if (xevent->xkey.window == m_root) {
@@ -64,6 +63,34 @@ if (xevent->type == KeyPress || xevent->type == KeyRelease) {
 Do not move normal key forwarding outside `m_isPrimary`; that would make a
 secondary client send its local keyboard to the server. Only the hotkey path is
 shared. Repeat detection remains primary-only.
+
+## Client scroll scale (X11, 2026-11-17)
+
+The client setting `yScrollScale` / `xScrollScale` (`[client]` in the client's
+`Deskflow.conf`, clamp 0.1–10.0) is applied in `XWindowsComputer::
+fakeMouseWheel`, **in click units, not wire units**: convert the 120-unit wire
+delta to whole clicks first (ceiling division — matches the historical click
+count at scale 1.0), multiply the click count by the scale, and carry the
+fractional remainder in `m_scrollRemainderX/Y` to the next event. A direction
+change discards the remainder. Upstream scaled the wire delta and then looped
+`while (axisDelta > 0)`, which quantized any sub-1.0 scale back up to one click
+per event.
+
+Invariants:
+
+- Keep the remainder in floating point between events; truncate toward zero
+  when emitting (floor of a negative accumulator fires a spurious opposite
+  click — same trap the EiComputer smooth-scroll code documents).
+- Keep `invertY/XScroll` flipping the final direction.
+- Accessors on `ISecondaryComputer` (`yScrollScale()` etc.) keep the settings
+  members private; do not duplicate reads.
+- `LOG_DEBUG("scroll scale: …")` at construction and `LOG_VERBOSE("wheel …")`
+  per event are the diagnostics; counting clicks with `xinput test-xi2 --root`
+  on the client is the only real proof the scale is applied.
+- If a floor below 0.1 is ever needed, lower the clamp in `ISecondaryComputer`
+  (e.g. 0.01) or forward the CG pixel delta from the macOS server instead of
+  line units; the trackpad's high event rate defeats per-event scaling
+  otherwise.
 
 ## Server invariant
 
@@ -159,6 +186,8 @@ The client should stay connected. Repeat for keys 2–4.
 ## References
 
 - [2026-11-16 module session record](../plans/2026/11/16/2026-11-16-client-return-hotkeys.md)
+- [2026-11-17 scroll-scale session record](../plans/2026/11/17/2026-11-17-x11-fractional-scroll-scale.md)
 - [Parent session record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/16/2026-11-16-deskflow-client-return-hotkeys.md)
+- [Parent scroll-scale + outage record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/17/2026-11-17-pp-scroll-scale-and-orphan-fd-fix.md)
 - [Parent runbook](file:///Users/lamnt45/git/hacker-workspace-automator/docs/important/deskflow-client-return-hotkeys.md)
 - [Module README](../Readme.md)

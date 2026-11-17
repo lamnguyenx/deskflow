@@ -25,10 +25,18 @@ message that returns the active cursor to the primary computer. The patch also
 fixes X11 secondary clients, which previously registered global hotkeys but
 never processed them.
 
+A second uncommitted patch (2026-11-17) makes the client
+`yScrollScale`/`xScrollScale` settings effective on X11: `XWindowsComputer`
+now scales in whole wheel clicks and carries the fractional remainder between
+events (upstream quantized any scaled delta back up to one click). See
+[2026-11-17 session record](plans/2026/11/17/2026-11-17-x11-fractional-scroll-scale.md).
+
 The patched Mac build is installed separately as `/Applications/Deskflow Dev.app`
 and needs Accessibility for the app and its inner `deskflow-core` (Screen
 Recording for the app). The notarized app does not handle `CSWP`.
 
 - [Client-return hotkey operating guide](important/client-return-hotkeys.md)
 - [2026-11-16 session record](plans/2026/11/16/2026-11-16-client-return-hotkeys.md)
+- [2026-11-17 scroll-scale session record](plans/2026/11/17/2026-11-17-x11-fractional-scroll-scale.md)
 - [Parent workspace record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/16/2026-11-16-deskflow-client-return-hotkeys.md)
+- [Parent workspace scroll-scale record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/17/2026-11-17-pp-scroll-scale-and-orphan-fd-fix.md)
