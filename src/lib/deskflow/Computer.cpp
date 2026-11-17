@@ -460,6 +460,11 @@ void Computer::leaveSecondary()
 {
   // release any keys we think are still down
   m_computer->fakeAllKeysUp();
+  // then release anything the platform still reports down. A modifier pressed
+  // on the primary and released after the cursor moved back never reaches this
+  // computer, and the shadow state cannot know about a key the platform
+  // reported down before we saw it.
+  m_computer->releasePressedKeys();
 }
 
 std::string Computer::getSecureInputApp() const

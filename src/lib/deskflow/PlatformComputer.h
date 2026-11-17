@@ -54,6 +54,7 @@ public:
   bool fakeKeyRepeat(KeyID id, KeyModifierMask mask, int32_t count, KeyButton button, const std::string &lang) override;
   bool fakeKeyUp(KeyButton button) override;
   void fakeAllKeysUp() override;
+  void releasePressedKeys() override;
   bool fakeCtrlAltDel() override;
   bool isKeyDown(KeyButton) const override;
   KeyModifierMask getActiveModifiers() const override;

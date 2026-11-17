@@ -53,6 +53,11 @@ void PlatformComputer::fakeAllKeysUp()
   getKeyState()->fakeAllKeysUp();
 }
 
+void PlatformComputer::releasePressedKeys()
+{
+  getKeyState()->releasePressedKeys();
+}
+
 bool PlatformComputer::fakeCtrlAltDel()
 {
   return getKeyState()->fakeCtrlAltDel();

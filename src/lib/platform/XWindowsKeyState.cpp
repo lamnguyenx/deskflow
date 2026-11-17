@@ -202,6 +202,30 @@ void XWindowsKeyState::pollPressedKeys(KeyButtonSet &pressedKeys) const
   }
 }
 
+void XWindowsKeyState::releasePressedKeys()
+{
+  // The X server owns the key state, so a key it still reports down has to be
+  // released with a real event.  fakeAllKeysUp() only covers keys this client
+  // still tracks as synthetic: a modifier released on the primary after the
+  // cursor moved back is never seen here, and once the server reports it down
+  // a later press is skipped, so it never becomes synthetic either.
+  KeyButtonSet pressedKeys;
+  pollPressedKeys(pressedKeys);
+  if (pressedKeys.empty()) {
+    return;
+  }
+
+  for (const auto &key : pressedKeys) {
+    XTestFakeKeyEvent(m_display, key, False, CurrentTime);
+  }
+  XSync(m_display, False);
+
+  // Resync the shadowed state from the server after the releases.
+  updateKeyState();
+
+  LOG_INFO("released %zu key(s) the X server still reported pressed", pressedKeys.size());
+}
+
 void XWindowsKeyState::getKeyMap(deskflow::KeyMap &keyMap)
 {
   // get autorepeat info.  we must use the global_auto_repeat told to

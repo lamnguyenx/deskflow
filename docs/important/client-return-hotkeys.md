@@ -92,6 +92,52 @@ Invariants:
   line units; the trackpad's high event rate defeats per-event scaling
   otherwise.
 
+## Stuck key release on leave (X11, 2026-11-17)
+
+A modifier can stay down on the X11 client after a switch: press `Ctrl` on the
+server, move back and release it there, and the release never reaches the
+client. `Computer::leaveSecondary()` already calls `fakeAllKeysUp()`, but
+`KeyState::fakeAllKeysUp()` only walks `m_syntheticKeys`; once the X server
+reports a key down, a later press is skipped as "already down", so the key
+never becomes synthetic and is never released. `XWindowsKeyState` has no
+`clearStaleModifiers()` override, and the libei one only resets local XKB
+bookkeeping, not the server's key state.
+
+`Computer::leaveSecondary()` now calls the new
+`m_computer->releasePressedKeys()` right after `fakeAllKeysUp()`:
+
+```cpp
+void XWindowsKeyState::releasePressedKeys()
+{
+  KeyButtonSet pressedKeys;
+  pollPressedKeys(pressedKeys);          // XQueryKeymap
+  if (pressedKeys.empty()) return;
+  for (const auto &key : pressedKeys)
+    XTestFakeKeyEvent(m_display, key, False, CurrentTime);
+  XSync(m_display, False);
+  updateKeyState();                     // resync shadowed state
+  LOG_INFO("released %zu key(s) the X server still reported pressed", pressedKeys.size());
+}
+```
+
+Invariants:
+
+- `releasePressedKeys()` is a default no-op on `IKeyState` and forwarded by
+  `PlatformComputer`; only the X11 key state overrides it. Do not override
+  `clearStaleModifiers()` instead — `KeyState::updateKeyState()` calls that on
+  every keyboard-mapping change, where injecting releases would cancel keys the
+  user is holding.
+- Call it only from `leaveSecondary()`: it injects input for keys this process
+  never pressed, including keys the user is holding locally.
+- Unmapped keycodes are fine: releases are keyed by `XQueryKeymap` keycode, not
+  keysym. The X11 `mod4` map on this host carries `Super_L` at two keycodes
+  (133 and 206), which is why a `keyup Super_L` reset misses one.
+- Locked modifiers (Caps/Num/Scroll) are not touched — they are real keyboard
+  state, not switch debris.
+- The workspace `deskflow-switch` hook still runs `deskflow-release-keys` on
+  both boundaries. It is the safety net for a core that is already out of sync
+  (before this patch, or after a crash mid-press), not the primary fix.
+
 ## Server invariant
 
 Handle the message in a proxy class that has a `Server*` (`ClientProxy1_4` or
@@ -172,6 +218,15 @@ INFO: entering computer
 
 The client should stay connected. Repeat for keys 2–4.
 
+Stuck-key release: leave a modifier pressed on pp, return with `Super+Ctrl+1`,
+and the client log must show the release (the key is cleared by the core, before
+the exit hook runs):
+
+```text
+INFO: leaving computer
+INFO: released 1 key(s) the X server still reported pressed
+```
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |
@@ -182,11 +237,13 @@ The client should stay connected. Repeat for keys 2–4.
 | Switch takes seconds | Compare clocks on both machines first; check the `CSWP` flush only if the message is genuinely delayed. |
 | GUI/core version-mismatch warning | The patched core was placed in the 1.27.0 app. Run the matching `Deskflow Dev.app` build instead. |
 | Keys act while on the Mac | The `m_active` guard is missing or `m_active` was not reset; check `Client::enter`/`leave`. |
+| `Ctrl`/`Super` stuck on the client after a switch | The client core must include the `releasePressedKeys()` patch (`INFO: released N key(s)…` at leave). Older cores only release synthetic keys; the workspace `deskflow-switch` hook clears the rest. |
 
 ## References
 
 - [2026-11-16 module session record](../plans/2026/11/16/2026-11-16-client-return-hotkeys.md)
 - [2026-11-17 scroll-scale session record](../plans/2026/11/17/2026-11-17-x11-fractional-scroll-scale.md)
+- [2026-11-17 stuck-key release session record](../plans/2026/11/17/2026-11-17-x11-release-stuck-keys-on-leave.md)
 - [Parent session record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/16/2026-11-16-deskflow-client-return-hotkeys.md)
 - [Parent scroll-scale + outage record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/17/2026-11-17-pp-scroll-scale-and-orphan-fd-fix.md)
 - [Parent runbook](file:///Users/lamnt45/git/hacker-workspace-automator/docs/important/deskflow-client-return-hotkeys.md)
