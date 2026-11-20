@@ -223,6 +223,12 @@ void ClientProxy1_0::getCursorPos(int32_t &x, int32_t &y) const
   y = m_info.m_my;
 }
 
+void ClientProxy1_0::queryInfo()
+{
+  LOG_VERBOSE("querying info from \"%s\"", getName().c_str());
+  ProtocolUtil::writef(getStream(), kMsgQInfo);
+}
+
 void ClientProxy1_0::enter(int32_t xAbs, int32_t yAbs, uint32_t seqNum, KeyModifierMask mask, bool)
 {
   LOG_VERBOSE("send enter to \"%s\", %d,%d %d %04x", getName().c_str(), xAbs, yAbs, seqNum, mask);

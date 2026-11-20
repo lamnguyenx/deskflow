@@ -168,6 +168,7 @@ Server::~Server()
   m_events->removeHandler(PrimaryComputerFakeInputEnd, m_inputFilter);
   m_events->removeHandler(Timer, this);
   stopSwitch();
+  cancelPendingJump();
 
   try {
     // force immediate disconnection of secondary clients
@@ -525,12 +526,63 @@ void Server::jumpToComputer(BaseClientProxy *newComputer)
   // record the current cursor position on the active computer
   m_active->setJumpCursorPos(m_x, m_y);
 
-  // get the last cursor position on the target computer
+  // the primary reports its cursor position synchronously
+  if (newComputer->isPrimary()) {
+    // get the last cursor position on the target computer
+    int32_t x;
+    int32_t y;
+    newComputer->getJumpCursorPos(x, y);
+
+    switchComputer(newComputer, x, y, false);
+    return;
+  }
+
+  // a client's own mouse can move its cursor while it is inactive, making
+  // the saved jump position stale. query the client's live cursor position
+  // and jump there when the reply arrives (the saved position is only the
+  // timeout fallback).
+  startPendingJump(newComputer);
+}
+
+void Server::startPendingJump(BaseClientProxy *client)
+{
+  // no interleaving: forget any earlier pending jump first
+  cancelPendingJump();
+
+  m_pendingJumpClient = client;
+  m_pendingJumpTimer = m_events->newOneShotTimer(m_pendingJumpTimeout, nullptr);
+  m_events->addHandler(
+      EventTypes::Timer, m_pendingJumpTimer, [this, client](const auto &) { handlePendingJumpTimeout(client); }
+  );
+
+  LOG_DEBUG("waiting for live cursor position from \"%s\" before jumping", getName(client).c_str());
+  client->queryInfo();
+}
+
+void Server::cancelPendingJump()
+{
+  if (m_pendingJumpTimer != nullptr) {
+    m_events->removeHandler(EventTypes::Timer, m_pendingJumpTimer);
+    m_events->deleteTimer(m_pendingJumpTimer);
+    m_pendingJumpTimer = nullptr;
+  }
+  m_pendingJumpClient = nullptr;
+}
+
+void Server::handlePendingJumpTimeout(BaseClientProxy *client)
+{
+  // a newer pending jump replaced this timer's client
+  if (m_pendingJumpClient != client) {
+    return;
+  }
+
+  LOG_WARN("client \"%s\" did not report its cursor position; using saved position", getName(client).c_str());
+  cancelPendingJump();
+
   int32_t x;
   int32_t y;
-  newComputer->getJumpCursorPos(x, y);
-
-  switchComputer(newComputer, x, y, false);
+  client->getJumpCursorPos(x, y);
+  switchComputer(client, x, y, false);
 }
 
 float Server::mapToFraction(const BaseClientProxy *client, Direction dir, int32_t x, int32_t y) const
@@ -1152,6 +1204,16 @@ void Server::handleShapeChanged(BaseClientProxy *client)
   int32_t y;
   client->getCursorPos(x, y);
   client->setJumpCursorPos(x, y);
+
+  // if waiting for this client's live cursor position, jump there now.
+  // if the client became active another way while we waited (e.g. the user
+  // crossed the screen edge), just drop the request instead of teleporting.
+  if (m_pendingJumpClient == client) {
+    cancelPendingJump();
+    if (client != m_active) {
+      switchComputer(client, x, y, false);
+    }
+  }
 
   // update the mouse coordinates
   if (client == m_active) {
@@ -1945,6 +2007,11 @@ bool Server::removeClient(BaseClientProxy *client)
   // remove from list
   m_clients.erase(getName(client));
   m_clientSet.erase(i);
+
+  // never complete a pending jump to a client being removed
+  if (m_pendingJumpClient == client) {
+    cancelPendingJump();
+  }
 
   return true;
 }

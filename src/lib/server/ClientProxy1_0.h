@@ -34,6 +34,7 @@ public:
   void getCursorPos(int32_t &x, int32_t &y) const override;
 
   // IClient overrides
+  void queryInfo() override;
   void enter(int32_t xAbs, int32_t yAbs, uint32_t seqNum, KeyModifierMask mask, bool forScreensaver) override;
   bool leave() override;
   void setClipboard(ClipboardID, const IClipboard *) override;

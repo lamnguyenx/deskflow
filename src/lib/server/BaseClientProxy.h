@@ -42,6 +42,16 @@ public:
   */
   void getJumpCursorPos(int32_t &x, int32_t &y) const;
 
+  //! Ask the client to re-send its information
+  /*!
+  Ask the client for a fresh kMsgDInfo reply (current shape and cursor
+  position). The cursor position is read live by the client, so a reply
+  reflects where the client's own mouse moved the cursor while the client
+  was inactive. The default implementation does nothing; primary
+  computers report their cursor position synchronously.
+  */
+  virtual void queryInfo() {}
+
   //! Get cursor position
   /*!
   Return if this proxy is for client or primary.

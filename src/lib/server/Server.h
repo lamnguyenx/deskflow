@@ -233,6 +233,13 @@ private:
   // jump to computer
   void jumpToComputer(BaseClientProxy *);
 
+  // start waiting for a live cursor position from the client before
+  // jumping to it; the client replies with kMsgDInfo
+  void startPendingJump(BaseClientProxy *);
+
+  // forget a pending jump and remove its timeout timer
+  void cancelPendingJump();
+
   // convert pixel position to fraction, using x or y depending on the
   // direction.
   float mapToFraction(const BaseClientProxy *, Direction, int32_t x, int32_t y) const;
@@ -322,6 +329,7 @@ private:
   void handleMotionSecondaryEvent(const Event &event);
   void handleWheelEvent(const Event &event);
   void handleSwitchWaitTimeout();
+  void handlePendingJumpTimeout(BaseClientProxy *client);
   void handleClientDisconnected(BaseClientProxy *client);
   void handleClientCloseTimeout(BaseClientProxy *client);
   void handleSwitchToComputerEvent(const Event &event);
@@ -397,6 +405,12 @@ private:
   BaseClientProxy *m_switchComputer = nullptr;
   double m_switchWaitDelay = 0.0;
   EventQueueTimer *m_switchWaitTimer = nullptr;
+
+  // jump waiting for the target client's live cursor position (a reply to
+  // queryInfo); falls back to the saved jump position after this timeout
+  BaseClientProxy *m_pendingJumpClient = nullptr;
+  EventQueueTimer *m_pendingJumpTimer = nullptr;
+  double m_pendingJumpTimeout = 0.5;
 
   // delay for double-tap computer switching
   double m_switchTwoTapDelay = 0.0;
