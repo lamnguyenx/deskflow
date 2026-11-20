@@ -75,6 +75,13 @@ loopback (typically < 5 ms on this LAN) only when a jump is requested.
   Accessibility grant tied to the old CDHash — the same rule the 2026-11-16
   record documents for core swaps. A re-grant for the app and the inner
   `deskflow-core` is expected on the next launch in the console session.
+- Ad-hoc signing then caused macOS to re-prompt "Control this Mac and access
+  data" on **every** launch even after re-adding the grant: the requirement
+  is pinned to the cdhash, which changes each time. Fixed the same day by
+  introducing the stable self-signed `Deskflow Local` identity
+  (`tools/macos-dev-signing.sh`), so the requirement becomes
+  `identifier … and certificate leaf = H"…"` and survives rebuilds. One
+  final re-grant (after removing the stale ad-hoc entries) is required.
 - This session's shell is in a **Background** launchd session
   (`launchctl managername` → `Background`): the core dies with `failed to
   initialize computer shape` even with all four displays awake

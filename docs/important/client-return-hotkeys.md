@@ -197,18 +197,42 @@ The patched app is installed separately:
 /Applications/Deskflow Dev.app
 ```
 
-It is ad-hoc signed and must be granted:
+It is signed with the stable local `Deskflow Local` identity (2026-11-20),
+not ad-hoc. Ad-hoc signatures pin the cdhash, so every rebuild invalidated the
+TCC grants and macOS kept re-prompting (“Control this Mac and access data”)
+no matter how often the entry was re-added. The identity’s certificate makes
+each requirement stable:
 
-- Accessibility for the app
-- Accessibility for `Contents/MacOS/deskflow-core`
+```text
+identifier "org.deskflow.deskflow" and certificate leaf = H"16c5…"   (app)
+identifier "deskflow-core"         and certificate leaf = H"16c5…"   (core)
+```
+
+Set up once, then re-sign after every rebuild (quit the app first):
+
+```bash
+tools/macos-dev-signing.sh setup     # create + import the identity (idempotent)
+tools/macos-dev-signing.sh sign      # signs core then app; verifies the seal
+tools/macos-dev-signing.sh status    # show identity + designated requirements
+```
+
+Grant once after the identity is in place (remove stale ad-hoc entries first):
+
+- Accessibility / “Control this Mac and access data” for the app
+- Accessibility for `Contents/MacOS/deskflow-core` (own TCC subject)
 - Screen Recording for the app
+
+With the stable requirements these survive rebuilds; only a changed
+*identifier* or a new certificate forces a re-grant. The private key lives in
+`~/.config/deskflow/signing/` (never commit it).
 
 The notarized `/Applications/Deskflow.app` (1.27.0) does **not** handle `CSWP`.
 Do not use it with a client that sends `CSWP`.
 
-Rebuilding the inner core changes its signature and can invalidate the
-Accessibility grant. After a rebuild, re-add the core (or the dev app) in
-System Settings → Privacy & Security → Accessibility.
+Rebuilding with the `Deskflow Local` identity keeps the TCC grants. Only a
+signature made with a different certificate (or a changed identifier) forces
+a re-grant; re-running `tools/macos-dev-signing.sh sign` after
+`cmake --build` does not.
 
 ## Runtime preconditions
 
