@@ -6,6 +6,37 @@ This fork adds client-side `Super+Ctrl+1…4` hotkeys that ask the server to mov
 the active cursor back to the primary computer. It is intentionally separate
 from the server-side `keystroke(...)` hotkeys.
 
+## Jump target: live cursor position (2026-11-20)
+
+A jump to a client used the position cached when that client was last left.
+A client with its own mouse (pp's USB mouse) moves its real cursor while
+inactive, so the jump landed on a stale position. `jumpToComputer()` now asks
+the client for a live position before jumping:
+
+- the server sends the existing `kMsgQInfo`; the client's reply `kMsgDInfo`
+  carries its current pointer position (read live, e.g. `XQueryPointer`);
+- the pending jump waits up to **500 ms** (`m_pendingJumpTimeout`); on
+  timeout it falls back to the saved jump position (WARN log);
+- the reply handler only switches if the client is still inactive — if the
+  user crossed the screen edge during the wait, the request is dropped
+  rather than teleporting;
+- jumps toward the primary remain synchronous (no round-trip on the
+  `Super+Ctrl+1…4` return path);
+- a pending jump is cancelled when its client disconnects or a newer jump
+  replaces it.
+
+Invariants:
+
+- Keep the fallback: a client that cannot answer `QINF` must still get a
+  working (saved-position) switch.
+- `BaseClientProxy::queryInfo()` stays a no-op default for primary proxies.
+- The shape-change clamp in `ClientProxy1_0::recvInfo()` still validates the
+  position before the jump uses it.
+
+Diagnostics: `waiting for live cursor position from "..." before jumping`
+(DEBUG) and `did not report its cursor position; using saved position`
+(WARN) in the server log.
+
 ## Message and flow
 
 ```text
@@ -242,6 +273,7 @@ INFO: released 1 key(s) the X server still reported pressed
 ## References
 
 - [2026-11-16 module session record](../plans/2026/11/16/2026-11-16-client-return-hotkeys.md)
+- [2026-11-20 live-cursor-position session record](../plans/2026/11/20/2026-11-20-live-cursor-position-on-jump.md)
 - [2026-11-17 scroll-scale session record](../plans/2026/11/17/2026-11-17-x11-fractional-scroll-scale.md)
 - [2026-11-17 stuck-key release session record](../plans/2026/11/17/2026-11-17-x11-release-stuck-keys-on-leave.md)
 - [Parent session record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/16/2026-11-16-deskflow-client-return-hotkeys.md)
