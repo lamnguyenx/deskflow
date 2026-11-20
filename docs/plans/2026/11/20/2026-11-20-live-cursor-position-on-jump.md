@@ -1,17 +1,19 @@
 # Live cursor position on jump to a client
 
 **Date:** 2026-11-20
-**Status:** Implemented and built; live verification pending the Mac-side
-relaunch (this session ran over a background launchd session without
-WindowServer access, so the server core could not be started from it).
+**Status:** Implemented, built, deployed, and **verified live** on the
+Mac/pp pair (user-confirmed after the console-session relaunch).
+**Commits:** `60644ac25` (code), `6d28daeed` (docs), `7994f8efb` (signing
+tool + runbook) on `master-lamnt45-02`.
 
 ## Problem
 
 With the Mac as server and pp (`VTCC-TULM7`) as the client, pp has its own
 USB mouse. While pp was inactive, that mouse could move pp's real X cursor
-anywhere. The next jump to pp — `Cmd+Ctrl+``` on the Mac or `Super+Ctrl+1…4`
-back from pp — landed on the **saved** jump position (`BaseClientProxy::
-m_x/m_y` recorded when pp was last left), not where pp's cursor actually was.
+anywhere. The next jump to pp — `Cmd+Ctrl+``` on the Mac (or any
+`switchToScreen`/`switchInDirection`/`toggleComputer` hotkey) — landed on the
+**saved** jump position (`BaseClientProxy::m_x/m_y`, recorded when pp was
+last left), not where pp's cursor actually was.
 
 The user-visible report: "when I use the native real mouse of the pp and do
 sth, when I Cmd+Ctrl+` again move mouse from mac to pp, it reused the old
@@ -62,53 +64,86 @@ needs rate limiting. `QINF`-on-demand reuses the existing info round-trip,
 including the server's shape re-clamp + `CIAK` acknowledgment, and costs one
 loopback (typically < 5 ms on this LAN) only when a jump is requested.
 
+## Build, deploy, and signing
+
+Build (the default SDK symlink now points at `MacOSX27.2.sdk`, whose stubs
+this clang cannot link — see Trials):
+
+```bash
+SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
+  cmake --build build-mac2 --target Deskflow deskflow-core -j4
+```
+
+Deploy (quit the app first):
+
+```bash
+install -m 755 build-mac2/bin/Deskflow.app/Contents/MacOS/Deskflow \
+  "/Applications/Deskflow Dev.app/Contents/MacOS/Deskflow"
+install -m 755 build-mac2/bin/Deskflow.app/Contents/MacOS/deskflow-core \
+  "/Applications/Deskflow Dev.app/Contents/MacOS/deskflow-core"
+tools/macos-dev-signing.sh sign     # stable identity: core first, then bundle
+```
+
+`tools/macos-dev-signing.sh` was added in this session (`setup|sign|status`).
+It creates/imports the self-signed `Deskflow Local` identity
+(`~/.config/deskflow/signing/`) and produces stable requirements:
+
+```text
+identifier "deskflow-core"         and certificate leaf = H"16c5…"   (core)
+identifier "org.deskflow.deskflow" and certificate leaf = H"16c5…"   (app)
+```
+
 ## Trials and errors
 
-- The first full build (`cmake --build build-mac2 --target Deskflow
-  deskflow-core`) failed at link with `error: unknown architecture` /
-  `arm64e.x1-macos` in every framework `.tbd`. The `MacOSX.sdk` symlink was
-  re-pointed to the new `MacOSX27.2.sdk` (Nov 18) whose stubs this clang's
-  tapi cannot parse. Pinning `SDKROOT=/Library/Developer/CommandLineTools/
-  SDKs/MacOSX26.5.sdk` builds cleanly. No source change involved.
-- The rebuilt app + core were deployed to `/Applications/Deskflow Dev.app`
-  and (necessarily) re-signed ad-hoc, which invalidates the TCC
-  Accessibility grant tied to the old CDHash — the same rule the 2026-11-16
-  record documents for core swaps. A re-grant for the app and the inner
-  `deskflow-core` is expected on the next launch in the console session.
-- Ad-hoc signing then caused macOS to re-prompt "Control this Mac and access
-  data" on **every** launch even after re-adding the grant: the requirement
-  is pinned to the cdhash, which changes each time. Fixed the same day by
-  introducing the stable self-signed `Deskflow Local` identity
-  (`tools/macos-dev-signing.sh`), so the requirement becomes
-  `identifier … and certificate leaf = H"…"` and survives rebuilds. One
-  final re-grant (after removing the stale ad-hoc entries) is required.
-- This session's shell is in a **Background** launchd session
-  (`launchctl managername` → `Background`): the core dies with `failed to
-  initialize computer shape` even with all four displays awake
-  (`system_profiler SPDisplaysDataType` lists them; the notarized stock core
-  dies identically from this context), AppleEvents time out, and `open`
-  launches the GUI only into the dead background context. Deskflow must be
-  relaunched from the console session; it cannot be started from here.
+- **SDK link failure.** The first full build failed at link with
+  `error: unknown architecture` / `arm64e.x1-macos` in every framework
+  `.tbd`. The `MacOSX.sdk` symlink was re-pointed to the new
+  `MacOSX27.2.sdk` (Nov 18) whose stubs this clang's tapi cannot parse.
+  Pinning `SDKROOT=…/MacOSX26.5.sdk` builds cleanly. No source involvement.
+- **Ad-hoc signing broke and then endlessly re-prompted TCC.** The rebuilt
+  app + core were first re-signed ad-hoc. That pins the TCC requirement to
+  the cdhash, which changes on every re-sign, so after re-adding the grant
+  macOS kept prompting "Control this Mac and access data" on every launch.
+  Fixed with the stable self-signed `Deskflow Local` identity above: remove
+  the stale entries (`tccutil reset Accessibility org.deskflow.deskflow`,
+  `tccutil reset Accessibility deskflow-core`,
+  `tccutil reset ScreenCapture org.deskflow.deskflow`), then grant once.
+  Signing order matters: **core before bundle**, because the app's resource
+  seal covers the core's file.
+- **The agent shell is a Background launchd session.** `launchctl managername`
+  → `Background`: no WindowServer. Every `deskflow-core` started from there —
+  including the stock notarized one — dies with `failed to initialize
+  computer shape` even with all displays awake, AppleEvents time out, and
+  `open` launches the GUI only into the dead context. Deskflow must be
+  relaunched from the console session; `sudo launchctl asuser "$(id -u)" open
+  "/Applications/Deskflow Dev.app"` can do that from a script.
+- **An orphaned core crashed on the first switch.** Killing the GUI left its
+  child `deskflow-core` running (reparented to launchd, still holding port
+  24800). When a switch was attempted it died with `EXC_BREAKPOINT (SIGTRAP)`
+  in `Server::onMouseMovePrimary → switchComputer → Computer::leave() →
+  OSXKeyState::pollActiveGroup()` → TSM's `islGetInputSourceListWithAdditions`
+  → `dispatch_assert_queue_fail` (macOS 27.2.1). That is the stock
+  edge-crossing path, not the new jump code; the TSM API insists on the main
+  queue and the server event loop is a QThread. It did not reproduce from the
+  proper console-session launch and there are no prior Deskflow crash
+  reports. Treat it as an upstream hazard to watch (if it ever reproduces in
+  a normal launch, marshal `pollActiveGroup()`'s TIS/TSM call to the main
+  thread). Kill the core too when killing the GUI, and keep the
+  `kill -TERM <core>` step in the deploy.
+- Manual-core probes with `--log-level`/`-f` failed: this build takes no such
+  options; run it without flags and read stdout.
 
-## Verification plan (console session)
+## Verification (live)
 
-1. Relaunch `/Applications/Deskflow Dev.app` on the Mac. If the core exits
-   with `assistive devices does not trust this process`, re-grant
-   Accessibility for the app **and** `Contents/MacOS/deskflow-core`
-   (remove + re-add if the toggle appears already on), then restart the app.
-2. On pp: `start_deskflow` if the client has given up retrying; otherwise it
-   reconnects on its own.
-3. Mac → pp (`Cmd+Ctrl+```), move pp's USB mouse somewhere unmistakable,
-   return with `Super+Ctrl+1`, jump again with `Cmd+Ctrl+``` — the cursor
-   must land where the USB mouse left it, not at the previous exit point.
-4. Server log at DEBUG shows the new lines:
-   `waiting for live cursor position from "VTCC-TULM7" before jumping`, and
-   the following `switch from ... at x,y` carries the live coordinates.
-5. Regression guard: unplug nothing, just jump Mac → pp → Mac twice in a row
-   without moving pp's mouse — behavior matches the old save/restore path
-   after the (sub-perceptible) query round-trip; a paused/verbose client
-   demonstrates the 500 ms fallback via
-   `did not report its cursor position; using saved position`.
+After relaunching the app with the stable signature and granting once:
+
+- Mac → pp → move pp's USB mouse → `Super+Ctrl+1` → Mac → pp again: the
+  cursor landed where pp's USB mouse left it (the reported defect is gone).
+- The core stayed up; pp reconnected; `lsof -nP -iTCP:24800` is owned by
+  `deskflow-core`.
+- DEBUG log lines: `waiting for live cursor position from "VTCC-TULM7"
+  before jumping`; the following `switch from ... at x,y` carries the live
+  coordinates.
 
 ## Invariants
 
@@ -120,9 +155,34 @@ loopback (typically < 5 ms on this LAN) only when a jump is requested.
   user who crossed the screen edge manually during the wait.
 - `queryInfo()` must keep the no-op default for primary proxies; only real
   network clients speak `QINF`.
+- Never re-sign the dev app ad-hoc: it breaks the TCC grants on every
+  rebuild and prompts endlessly. Use `tools/macos-dev-signing.sh sign`.
+
+## Lessons learned
+
+- Deskflow's jump-position cache is write-once-per-leave; any client with
+  local input makes it stale by design. Anything that needs a *current*
+  client position must ask (`QINF`) or observe (`DINF`) — never trust the
+  jump cache.
+- The v1.0 `QINF`/`DINF` round-trip is the cheapest way to do that: the
+  server side alone changes, no protocol extension, and the client's reply
+  is already shape-validated and acknowledged.
+- TCC consent cannot be granted by sudo or `tccutil`; the best automation is
+  `tccutil reset` for stale entries + `sudo launchctl asuser ... open` to
+  launch into the console session, then one human Allow. A stable code
+  signature turns "allow on every launch" into "allow once".
+- A background launchd session is a diagnostic trap on macOS: display APIs,
+  AppleEvents, `open`, and TSM all misbehave. Run `launchctl managername`
+  before blaming the code or the hardware — this session initially looked
+  exactly like the documented "displays asleep" precondition.
+- Killing a GUI does not kill its spawned core; the orphan keeps the
+  listening socket and runs in the dead context. Always check
+  `pgrep -f deskflow` after quitting.
 
 ## References
 
-- [Operating guide update](../../important/client-return-hotkeys.md)
-- Parent session record: `hacker-workspace-automator/docs/plans/2026/11/20/`
+- [Operating guide update](../../../../important/client-return-hotkeys.md)
+- [Signing tool](../../../../tools/macos-dev-signing.sh)
 - [2026-11-16 client-return hotkeys](../16/2026-11-16-client-return-hotkeys.md) — the `CSWP` jump being fixed here
+- Parent session record:
+  [2026-11-20 live cursor jump](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/20/2026-11-20-deskflow-live-cursor-jump.md)
