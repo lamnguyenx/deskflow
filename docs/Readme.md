@@ -44,6 +44,21 @@ client's **live** cursor position: `jumpToComputer()` asks the client with
 saved jump position as a 500 ms timeout fallback. Server side only. See
 [2026-11-20 session record](plans/2026/11/20/2026-11-20-live-cursor-position-on-jump.md).
 
+A fifth change (2026-11-24) adds jackal (`jk`) as a second client. It runs
+Wayfire, whose portal has no RemoteDesktop interface, so the client uses the
+wlroots virtual-pointer/virtual-keyboard backend instead of Xwayland; the
+latter connects but cannot move the real Wayfire cursor. jackal's main output
+must sit at logical `x=0` so the entry point is not in an output gap.
+Clipboard sharing and the `Super+Ctrl` return hotkeys are X11-only and are not
+available on this backend. See
+[2026-11-24 session record](plans/2026/11/24/2026-11-24-jackal-wayfire-client.md)
+and the [jackal client guide](important/jackal-wayfire-client.md).
+
+The `master-lamnt45-02-wlroots` branch carries all of the above plus the
+upstream wlroots backend (cherry-picked from `deskflow/deskflow`
+`1f7bce66d`). It is the branch used by jackal; the Mac server remains on
+`master-lamnt45-02` because the wlroots code is Linux-only.
+
 The patched Mac build is installed separately as `/Applications/Deskflow Dev.app`
 and needs Accessibility for the app and its inner `deskflow-core` (Screen
 Recording for the app). The notarized app does not handle `CSWP`.
@@ -59,6 +74,8 @@ the bundle.
 - [2026-11-17 scroll-scale session record](plans/2026/11/17/2026-11-17-x11-fractional-scroll-scale.md)
 - [2026-11-17 stuck-key release session record](plans/2026/11/17/2026-11-17-x11-release-stuck-keys-on-leave.md)
 - [2026-11-20 live-cursor-position session record](plans/2026/11/20/2026-11-20-live-cursor-position-on-jump.md)
+- [2026-11-24 jackal/Wayfire session record](plans/2026/11/24/2026-11-24-jackal-wayfire-client.md)
+- [Jackal Wayfire client guide](important/jackal-wayfire-client.md)
 - [Parent workspace record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/16/2026-11-16-deskflow-client-return-hotkeys.md)
 - [Parent workspace scroll-scale record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/17/2026-11-17-pp-scroll-scale-and-orphan-fd-fix.md)
 - [Parent workspace live-cursor record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/20/2026-11-20-deskflow-live-cursor-jump.md)

@@ -1,6 +1,8 @@
 # Maintaining client-return hotkeys
 
-**Status:** Local fork patch; built and verified against the Mac/pp pair.
+**Status:** Local fork patch; built and verified against the Mac/pp pair. The
+hotkeys are X11-only; jackal (Wayfire) uses the wlroots backend and does not
+register them (see [jackal-wayfire-client.md](jackal-wayfire-client.md)).
 
 This fork adds client-side `Super+Ctrl+1…4` hotkeys that ask the server to move
 the active cursor back to the primary computer. It is intentionally separate
@@ -189,6 +191,25 @@ bool ClientProxy1_4::parseMessage(const uint8_t *code)
 `Server::switchToPrimary()` must check `m_active != m_primaryClient` before
 calling `jumpToComputer()`.
 
+## Wayfire/Wayland client (jackal, 2026-11-24)
+
+jackal (`jk`) runs Wayfire and connects through the wlroots backend
+(`master-lamnt45-02-wlroots`). The `Super+Ctrl+1…4` grabs live behind
+`#if WINAPI_XWINDOWS` in `Client::registerClientHotkeys()` and are therefore
+**not registered** by the wlroots client. The X11 fallback
+(`~/bin/deskflow-start-x11`) still has them, but it cannot move the real
+Wayfire cursor.
+
+Practical consequence: to leave jackal, move the cursor off its left edge
+(the server grid is `VTCC-TULM7 | Mac | jackal`). Do not assume `CSWP` will
+arrive from jackal. The server-side `switchToScreen()` hotkeys still work
+while the Mac is active.
+
+The wlroots backend also disables clipboard sharing because Wayfire has no
+`ext-data-control`. Neither limitation is a regression in the X11 path: pp
+keeps the hotkeys, scroll scale, stuck-key release and clipboard behavior
+described above.
+
 ## Build and trust
 
 The patched app is installed separately:
@@ -300,6 +321,8 @@ INFO: released 1 key(s) the X server still reported pressed
 - [2026-11-20 live-cursor-position session record](../plans/2026/11/20/2026-11-20-live-cursor-position-on-jump.md)
 - [2026-11-17 scroll-scale session record](../plans/2026/11/17/2026-11-17-x11-fractional-scroll-scale.md)
 - [2026-11-17 stuck-key release session record](../plans/2026/11/17/2026-11-17-x11-release-stuck-keys-on-leave.md)
+- [2026-11-24 jackal/Wayfire session record](../plans/2026/11/24/2026-11-24-jackal-wayfire-client.md)
+- [Jackal Wayfire client guide](jackal-wayfire-client.md)
 - [Parent session record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/16/2026-11-16-deskflow-client-return-hotkeys.md)
 - [Parent scroll-scale + outage record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/17/2026-11-17-pp-scroll-scale-and-orphan-fd-fix.md)
 - [Parent runbook](file:///Users/lamnt45/git/hacker-workspace-automator/docs/important/deskflow-client-return-hotkeys.md)
