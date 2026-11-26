@@ -38,8 +38,11 @@ right of the Mac).
 
 The wlroots support is an upstream commit (`1f7bce66d`) cherry-picked onto
 `master-lamnt45-02`; it is Linux-only. The Mac server does not need that
-branch, and `/Applications/Deskflow Dev.app` remains built from
-`master-lamnt45-02`.
+branch. `/Applications/Deskflow Dev.app` is a symlink to
+`/Users/lamnt45/git/deskflow/build-mac2/bin/Deskflow.app`, built from
+`master-lamnt45-02`. See the
+[parent 2026-11-26 build/symlink record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/26/2026-11-26-keyboard-indicator-fast-return-race-and-deskflow-symlink.md)
+for the build, signing, and launch details.
 
 ## Build on jackal
 
@@ -258,4 +261,5 @@ jackal's Tailscale address.
 
 - [2026-11-24 session record](../plans/2026/11/24/2026-11-24-jackal-wayfire-client.md)
 - [Client-return hotkeys and X11 invariants](client-return-hotkeys.md)
+- [Parent 2026-11-26 fast-return + symlink record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/26/2026-11-26-keyboard-indicator-fast-return-race-and-deskflow-symlink.md)
 - [Upstream wlroots commit](https://github.com/deskflow/deskflow/commit/1f7bce66d)

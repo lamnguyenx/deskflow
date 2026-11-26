@@ -59,15 +59,17 @@ upstream wlroots backend (cherry-picked from `deskflow/deskflow`
 `1f7bce66d`). It is the branch used by jackal; the Mac server remains on
 `master-lamnt45-02` because the wlroots code is Linux-only.
 
-The patched Mac build is installed separately as `/Applications/Deskflow Dev.app`
-and needs Accessibility for the app and its inner `deskflow-core` (Screen
+The patched Mac build is exposed as a symlink at
+`/Applications/Deskflow Dev.app` to
+`/Users/lamnt45/git/deskflow/build-mac2/bin/Deskflow.app` (not a copy) and
+needs Accessibility for the app and its inner `deskflow-core` (Screen
 Recording for the app). The notarized app does not handle `CSWP`.
 
-Sign the dev app with the stable local `Deskflow Local` identity
+Sign the build bundle in place with the stable local `Deskflow Local` identity
 (`tools/macos-dev-signing.sh setup|sign|status`), never ad-hoc: ad-hoc
-signatures pin the TCC requirement to the cdhash, so every rebuild
-invalidates the grants and macOS re-prompts on every launch. Core first, then
-the bundle.
+signatures pin the TCC requirement to the cdhash, so every rebuild invalidates
+the grants and macOS re-prompts on every launch. Core first, then the bundle;
+the `/Applications` symlink resolves to the same files.
 
 - [Client-return hotkey operating guide](important/client-return-hotkeys.md)
 - [2026-11-16 session record](plans/2026/11/16/2026-11-16-client-return-hotkeys.md)
@@ -79,3 +81,4 @@ the bundle.
 - [Parent workspace record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/16/2026-11-16-deskflow-client-return-hotkeys.md)
 - [Parent workspace scroll-scale record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/17/2026-11-17-pp-scroll-scale-and-orphan-fd-fix.md)
 - [Parent workspace live-cursor record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/20/2026-11-20-deskflow-live-cursor-jump.md)
+- [Parent workspace 2026-11-26 fast-return + symlink record](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/26/2026-11-26-keyboard-indicator-fast-return-race-and-deskflow-symlink.md)

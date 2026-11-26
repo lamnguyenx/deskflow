@@ -212,30 +212,45 @@ described above.
 
 ## Build and trust
 
-The patched app is installed separately:
+The patched app is exposed as a symlink, not a copy:
 
 ```text
-/Applications/Deskflow Dev.app
+/Applications/Deskflow Dev.app -> /Users/lamnt45/git/deskflow/build-mac2/bin/Deskflow.app
 ```
 
-It is signed with the stable local `Deskflow Local` identity (2026-11-20),
-not ad-hoc. Ad-hoc signatures pin the cdhash, so every rebuild invalidated the
-TCC grants and macOS kept re-prompting (“Control this Mac and access data”)
-no matter how often the entry was re-added. The identity’s certificate makes
-each requirement stable:
+Rebuild in `/Users/lamnt45/git/deskflow` and the `/Applications` path picks up
+the new bundle on the next launch. It is signed with the stable local
+`Deskflow Local` identity (2026-11-20), not ad-hoc. Ad-hoc signatures pin the
+cdhash, so every rebuild invalidated the TCC grants and macOS kept re-prompting
+(“Control this Mac and access data”) no matter how often the entry was
+re-added. The identity’s certificate makes each requirement stable:
 
 ```text
 identifier "org.deskflow.deskflow" and certificate leaf = H"16c5…"   (app)
 identifier "deskflow-core"         and certificate leaf = H"16c5…"   (core)
 ```
 
-Set up once, then re-sign after every rebuild (quit the app first):
+Set up once, then re-sign the build bundle after every rebuild (quit the app
+first):
 
 ```bash
+cd /Users/lamnt45/git/deskflow
 tools/macos-dev-signing.sh setup     # create + import the identity (idempotent)
-tools/macos-dev-signing.sh sign      # signs core then app; verifies the seal
-tools/macos-dev-signing.sh status    # show identity + designated requirements
+tools/macos-dev-signing.sh sign build-mac2/bin/Deskflow.app   # core then app; verifies the seal
+tools/macos-dev-signing.sh status build-mac2/bin/Deskflow.app # identity + designated requirements
 ```
+
+If the `/Applications` symlink is missing:
+
+```bash
+ln -s /Users/lamnt45/git/deskflow/build-mac2/bin/Deskflow.app "/Applications/Deskflow Dev.app"
+```
+
+Do not copy the built binaries over the symlink; that turns the app back into a
+stale copy and the next build will not be the running bundle. The full
+build-path/symlink session (including trials and mistakes) is in the parent
+workspace record:
+[2026-11-26 keyboard-indicator fast-return + Deskflow symlink](file:///Users/lamnt45/git/hacker-workspace-automator/docs/plans/2026/11/26/2026-11-26-keyboard-indicator-fast-return-race-and-deskflow-symlink.md).
 
 Grant once after the identity is in place (remove stale ad-hoc entries first):
 
@@ -269,8 +284,10 @@ a re-grant; re-running `tools/macos-dev-signing.sh sign` after
 Build:
 
 ```bash
-# Mac
+# Mac (repo root, or symlink the app as above)
+cd /Users/lamnt45/git/deskflow
 cmake --build build-mac2 --target Deskflow deskflow-core -j4
+tools/macos-dev-signing.sh sign build-mac2/bin/Deskflow.app
 
 # Linux client
 cd /home/lamnt45/git4/deskflow
